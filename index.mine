@@ -1,0 +1,13 @@
+craftar bau {
+  bau = 10 + 20;
+  funil (bau > 15) {
+    fornalhaa bau;
+    2.a3
+    "texto"
+    minha_variavel_muito_longa_muito_longa
+    123nome
+    @
+  } ejetor {
+    bau = bau - 1;
+  }
+}
