@@ -1,9 +1,10 @@
 craftar bau {
   bau = 10 + 20;
   funil (bau > 15) {
-    fornalhaa bau;
+    //comentario
+    fornalha bau;
     2.a3
-    "texto"
+    "texto
     minha_variavel_muito_longa_muito_longa
     123nome
     @
