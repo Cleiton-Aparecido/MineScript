@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import scrolledtext
+from tkinter import PhotoImage
 import re
 import os
 
@@ -103,6 +104,8 @@ def criar_interface():
     fg = "#ffffff"
     highlight = "#2d2d2d"
 
+    icone = PhotoImage(file='icon.png')
+    janela.iconphoto(False, icone)
 
     janela.configure(bg=bg)
 
