@@ -1,3 +1,4 @@
+#sintatico.py
 import tkinter as tk
 from typing import List, Tuple, Any
 
