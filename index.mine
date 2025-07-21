@@ -7,7 +7,7 @@ craftar soma(bau a, bau b) {
     fornalha a + b;      
 }
 
-// Função que calcula média (exemplo extra de operação aritmética)
+// Função que calcula média (exemplo extra de operação aritmética) 
 craftar media(bau a, bau b) {
     fornalha (a + b) / 2;
 }
@@ -19,6 +19,11 @@ bau resultadoMedia  = media(x, y);
 // Impressão dos resultados
 quadro("Soma: ",   resultadoSoma);
 quadro("Média: ",  resultadoMedia);
+
+
+
+
+
 
 
 
