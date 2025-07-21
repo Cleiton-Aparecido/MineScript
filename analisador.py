@@ -94,12 +94,12 @@ def criar_interface():
     term_frame.add(sint_frame)
 
     ast_frame = tk.Frame(term_frame, bg=bg)
-    tk.Label(ast_frame, text="Árvore Sintática", bg=bg, fg=fg).pack(anchor='nw')
-    term_ast = scrolledtext.ScrolledText(ast_frame, font=("Consolas",12), height=8,
-                                         bg=hl, fg='white', insertbackground='white')
-    term_ast.pack(fill=tk.BOTH, expand=True)
-    ast_frame.pack(fill=tk.BOTH, expand=True)
-    term_frame.add(ast_frame)
+    # tk.Label(ast_frame, text="Árvore Sintática", bg=bg, fg=fg).pack(anchor='nw')
+    # term_ast = scrolledtext.ScrolledText(ast_frame, font=("Consolas",12), height=8,
+    #                                      bg=hl, fg='white', insertbackground='white')
+    # term_ast.pack(fill=tk.BOTH, expand=True)
+    # ast_frame.pack(fill=tk.BOTH, expand=True)
+    # term_frame.add(ast_frame)
 
     # Comandos
     current_path = None
@@ -123,7 +123,7 @@ def criar_interface():
     def cmd_listar():
         term_lex.delete("1.0",tk.END)
         term_sint.delete("1.0",tk.END)
-        term_ast.delete("1.0",tk.END)
+        # term_ast.delete("1.0",tk.END)
         tokens = lex(entrada.get("1.0",tk.END))
         term_lex.insert(tk.END, "—— LISTAGEM DE TOKENS ——\n")
         for t in tokens[:-1]:
@@ -133,12 +133,12 @@ def criar_interface():
         entrada.delete("1.0",tk.END)
         term_lex.delete("1.0",tk.END)
         term_sint.delete("1.0",tk.END)
-        term_ast.delete("1.0",tk.END)
+        # term_ast.delete("1.0",tk.END)
 
     def cmd_executar():
         term_lex.delete("1.0",tk.END)
         term_sint.delete("1.0",tk.END)
-        term_ast.delete("1.0",tk.END)
+        # term_ast.delete("1.0",tk.END)
         # Léxico
         tokens = lex(entrada.get("1.0",tk.END))
         term_lex.insert(tk.END, "—— Análise Léxica ——\n")
@@ -152,7 +152,7 @@ def criar_interface():
             analisador.execute(program)
             term_sint.insert(tk.END, "\nPrograma executado com sucesso.\n")
         # AST
-        term_ast.insert(tk.END, "\n—— Árvore Sintática ——\n")
+        # term_ast.insert(tk.END, "\n—— Árvore Sintática ——\n")
         analisador.print_tree(node=program)
 
     janela.mainloop()
