@@ -130,7 +130,7 @@ def criar_interface():
             term_lex.insert(tk.END, f"{t[0]:<12} {t[1]:<10}  (L{t[2]},C{t[3]})\n")
 
     def cmd_limpar():
-        entrada.delete("1.0",tk.END)
+        # entrada.delete("1.0",tk.END)
         term_lex.delete("1.0",tk.END)
         term_sint.delete("1.0",tk.END)
         # term_ast.delete("1.0",tk.END)
