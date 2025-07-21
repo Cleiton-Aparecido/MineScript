@@ -1,9 +1,53 @@
-#sintatico.py
+# sintatico.py
 import tkinter as tk
 from typing import List, Tuple, Any
 
+# --- Nós da AST ---
+class ASTNode: pass
+
+class Program(ASTNode):
+    def __init__(self, statements: List[ASTNode]):
+        self.statements = statements
+
+class VarDecl(ASTNode):
+    def __init__(self, name: str, expr: ASTNode):
+        self.name, self.expr = name, expr
+
+class Assign(ASTNode):
+    def __init__(self, name: str, expr: ASTNode):
+        self.name, self.expr = name, expr
+
+class FuncDecl(ASTNode):
+    def __init__(self, name: str, params: List[str], body: List[ASTNode]):
+        self.name, self.params, self.body = name, params, body
+
+class Return(ASTNode):
+    def __init__(self, expr: ASTNode):
+        self.expr = expr
+
+class Print(ASTNode):
+    def __init__(self, args: List[ASTNode]):
+        self.args = args
+
+class Call(ASTNode):
+    def __init__(self, name: str, args: List[ASTNode]):
+        self.name, self.args = name, args
+
+class BinOp(ASTNode):
+    def __init__(self, left: ASTNode, op: str, right: ASTNode):
+        self.left, self.op, self.right = left, op, right
+
+class Literal(ASTNode):
+    def __init__(self, value: Any):
+        self.value = value
+
+class Var(ASTNode):
+    def __init__(self, name: str):
+        self.name = name
+
+# --- Parser / Interpretador ---
 class AnalisadorSintatico:
-    def __init__(self, tokens: List[Tuple[str, str]], terminal: tk.Text):
+    def __init__(self, tokens: List[Tuple[str,str,int,int]], terminal: tk.Text):
         self.tokens = tokens
         self.pos = 0
         self.terminal = terminal
@@ -12,293 +56,211 @@ class AnalisadorSintatico:
         self.symbols = {}
         self.functions = {}
 
-    def token_atual(self) -> Tuple[str, str]:
-        return self.tokens[self.pos] if self.pos < len(self.tokens) else ('EOF', '')
+    def token_atual(self):
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else ('EOF','',0,0)
 
-    def peek(self) -> Tuple[str, str]:
-        return self.tokens[self.pos+1] if self.pos+1 < len(self.tokens) else ('EOF', '')
+    def peek(self):
+        return self.tokens[self.pos+1] if self.pos+1 < len(self.tokens) else ('EOF','',0,0)
 
-    def consumir(self, tipo: str):
-        if self.token_atual()[0] == tipo:
+    def erro(self, msg: str, token=None):
+        if token is None: token = self.token_atual()
+        _, val, line, col = token
+        self.terminal.insert(tk.END,
+            f"[Linha {line}, Coluna {col}] {msg}: '{val}'\n", "erro")
+        self.has_error = True
+
+    def consumir(self, tipo: str, val: str=None):
+        tok,valor,_,_ = self.token_atual()
+        if tok == tipo and (val is None or valor == val):
             self.pos += 1
         else:
-            self.terminal.insert(
-                tk.END,
-                f"Erro sintático: esperado {tipo}, encontrado {self.token_atual()[0]}\n",
-                "erro"
-            )
-            self.has_error = True
+            esperado = tipo + (f" '{val}'" if val else "")
+            self.erro(f"Erro sintático: esperado {esperado}", self.token_atual())
             self.pos += 1
 
-    def analisar(self):
+    # ---- Parsing ----
+    def parse(self) -> Program:
+        stmts = []
         while self.token_atual()[0] != 'EOF':
-            tok = self.token_atual()[0]
-            if tok == 'FUNCAO':
-                self.func_decl()
-            elif tok == 'QUADRO':
-                self.print_stmt()
-            else:
-                self.stmt()
+            node = self.parse_stmt()
+            if node: stmts.append(node)
+        return Program(stmts)
 
-    def stmt(self):
-        tok = self.token_atual()[0]
-        # Chamada de função
-        if tok == 'ID' and self.peek()[0] == 'DELIM' and self.peek()[1] == '(':
-            _ = self.expr()
-            self.consumir('DELIM')  # ;
-        elif tok == 'QUADRO':
-            self.print_stmt()
-        elif tok in ('VARIAVEL', 'ID'):
-            self.atribuicao()
-        elif tok == 'IF':
-            self.if_stmt()
-        elif tok == 'LOOP_WHILE':
-            self.while_stmt()
-        elif tok == 'LOOP_FOR':
-            self.for_stmt()
-        elif tok == 'RETORNO':
-            self.return_stmt()
-        else:
-            val = self.token_atual()[1]
-            self.terminal.insert(
-                tk.END,
-                f"Erro sintático: statement inesperado '{val}'\n",
-                "erro"
-            )
-            self.has_error = True
-            self.pos += 1
+    def parse_stmt(self):
+        tok,_,line,col = self.token_atual()
+        if tok == 'VARIAVEL': return self.parse_var_decl()
+        if tok == 'ID' and self.peek()[0]=='ATRIBUICAO': return self.parse_assign()
+        if tok == 'ID' and self.peek()[0]=='DELIM' and self.peek()[1]=='(': return self.parse_call_stmt()
+        if tok == 'QUADRO': return self.parse_print()
+        if tok == 'FUNCAO': return self.parse_func_decl()
+        if tok == 'RETORNO': return self.parse_return()
+        # erro genérico
+        self.erro("Erro sintático: statement inesperado", self.token_atual())
+        self.pos += 1
+        return None
 
-    def func_decl(self):
-        # craftar nome(params) { corpo }
+    def parse_var_decl(self):
+        self.consumir('VARIAVEL')
+        name = self.token_atual()[1]; self.consumir('ID')
+        self.consumir('ATRIBUICAO')
+        expr = self.parse_expr()
+        self.consumir('DELIM')
+        return VarDecl(name, expr)
+
+    def parse_assign(self):
+        name = self.token_atual()[1]; self.consumir('ID')
+        self.consumir('ATRIBUICAO')
+        expr = self.parse_expr()
+        self.consumir('DELIM')
+        return Assign(name, expr)
+
+    def parse_call_stmt(self):
+        call = self.parse_call_expr()
+        self.consumir('DELIM')
+        return call
+
+    def parse_print(self):
+        self.consumir('QUADRO'); self.consumir('DELIM','(')
+        args = [self.parse_expr()]
+        while self.token_atual()[1] == ',':
+            self.consumir('DELIM',','); args.append(self.parse_expr())
+        self.consumir('DELIM',')'); self.consumir('DELIM')
+        return Print(args)
+
+    def parse_func_decl(self):
         self.consumir('FUNCAO')
         name = self.token_atual()[1]; self.consumir('ID')
-        self.consumir('DELIM')  # (
-        params: List[str] = []
-        if self.token_atual()[0] == 'VARIAVEL':
-            while True:
-                self.consumir('VARIAVEL')
-                pname = self.token_atual()[1]; self.consumir('ID')
-                params.append(pname)
-                if self.token_atual() == ('DELIM', ','):
-                    self.consumir('DELIM')
-                else:
-                    break
-        self.consumir('DELIM')  # )
-        self.consumir('DELIM')  # {
-        start = self.pos
-        depth = 1
-        while depth > 0:
-            tok, val = self.token_atual()
-            if tok == 'EOF':
-                self.terminal.insert(
-                    tk.END,
-                    f"Erro sintático: função '{name}' sem '}}' de fechamento\n",
-                    "erro"
-                )
-                self.has_error = True
-                break
-            if tok == 'DELIM' and val == '{': depth += 1
-            elif tok == 'DELIM' and val == '}': depth -= 1
-            self.pos += 1
-        end = self.pos - 1
-        body = self.tokens[start:end]
-        if self.token_atual() == ('DELIM', '}'):
-            self.consumir('DELIM')
-        self.functions[name] = (params, body)
-
-    def atribuicao(self):
-        if self.token_atual()[0] == 'VARIAVEL':
+        self.consumir('DELIM','(')
+        params = []
+        while self.token_atual()[0] == 'VARIAVEL':
             self.consumir('VARIAVEL')
-            name = self.token_atual()[1]; self.consumir('ID')
-            self.declared.add(name)
-        else:
-            name = self.token_atual()[1]
-            if name not in self.declared:
-                self.terminal.insert(
-                    tk.END,
-                    f"Erro semântico: variável '{name}' não declarada\n",
-                    "erro"
-                )
-                self.has_error = True
-            self.consumir('ID')
-        self.consumir('ATRIBUICAO')
-        val = self.expr()
-        self.symbols[name] = val
-        self.consumir('DELIM')
+            pname = self.token_atual()[1]; self.consumir('ID')
+            params.append(pname)
+            if self.token_atual()[1] == ',':
+                self.consumir('DELIM',',')
+        self.consumir('DELIM',')'); self.consumir('DELIM','{')
+        body = []
+        while not (self.token_atual()[0]=='DELIM' and self.token_atual()[1]=='}'):
+            node = self.parse_stmt()
+            if node: body.append(node)
+        self.consumir('DELIM','}')
+        return FuncDecl(name, params, body)
 
-    def print_stmt(self):
-        self.consumir('QUADRO'); self.consumir('DELIM')  # (
-        vals = [self.expr()]
-        while self.token_atual() == ('DELIM', ','):
-            self.consumir('DELIM'); vals.append(self.expr())
-        self.consumir('DELIM')  # )
-        if self.token_atual() == ('DELIM', ';'):
-            self.consumir('DELIM')
-        self.terminal.insert(tk.END, ''.join(str(v) for v in vals) + '\n')
-
-    def return_stmt(self):
+    def parse_return(self):
         self.consumir('RETORNO')
-        self.symbols['__return__'] = self.expr()
+        expr = self.parse_expr()
         self.consumir('DELIM')
+        return Return(expr)
 
-    def if_stmt(self):
-        self.consumir('IF'); self.consumir('DELIM')  # (
-        cond = self.expr(); self.consumir('DELIM')  # )
-        if cond:
-            self.consumir('DELIM')  # {
-            while not (self.token_atual() == ('DELIM', '}')):
-                self.stmt()
-            self.consumir('DELIM')  # }
-            if self.token_atual()[0] == 'ELSE':
-                self.consumir('ELSE'); self.skip_block_body()
-        else:
-            self.skip_block_body()
-            if self.token_atual()[0] == 'ELSE':
-                self.consumir('ELSE'); self.skip_block_body()
-
-    def while_stmt(self):
-        self.consumir('LOOP_WHILE'); self.consumir('DELIM')  # (
-        start = self.pos
-        cond = self.expr(); self.consumir('DELIM')  # )
-        if cond:
-            self.consumir('DELIM')  # {
-            while cond:
-                checkpoint = self.pos
-                while not (self.token_atual() == ('DELIM', '}')):
-                    self.stmt()
-                self.consumir('DELIM')  # }
-                self.pos = start; cond = self.expr(); self.consumir('DELIM')
-            self.skip_block_body()
-        else:
-            self.skip_block_body()
-
-    def for_stmt(self):
-        self.consumir('LOOP_FOR'); self.consumir('DELIM')  # (
-        if self.token_atual()[0] == 'VARIAVEL':
-            self.atribuicao()
-        elif self.token_atual()[1] == ';':
-            self.consumir('DELIM')
-        cond = True
-        if self.token_atual()[1] != ';':
-            cond = self.expr()
-        self.consumir('DELIM')
-        post_start = self.pos
-        if self.token_atual()[1] != ')':
-            self.expr()
-        self.consumir('DELIM')
-        if cond:
-            while cond:
-                self.skip_to_body()
-                while not (self.token_atual() == ('DELIM', '}')):
-                    self.stmt()
-                self.consumir('DELIM')
-                self.pos = post_start; cond = self.expr(); self.consumir('DELIM')
-            self.skip_block_body()
-        else:
-            self.skip_block_body()
-
-    def expr(self) -> Any:
-        return self.expr_logic()
-
-    def expr_logic(self) -> Any:
-        left = self.expr_rel()
-        while self.token_atual()[0] == 'OP_LOGICO':
-            op = self.token_atual()[1]; self.consumir('OP_LOGICO')
-            right = self.expr_rel()
-            if op == 'e': left = left and right
-            else: left = left or right
-        return left
-
-    def expr_rel(self) -> Any:
-        left = self.expr_arit()
-        if self.token_atual()[0] == 'OP_REL':
-            op = self.token_atual()[1]; self.consumir('OP_REL')
-            right = self.expr_arit()
-            left = {
-                '==': left == right, '!=': left != right,
-                '>': left > right, '<': left < right,
-                '>=': left >= right, '<=': left <= right
-            }[op]
-        return left
-
-    def expr_arit(self) -> Any:
-        val = self.term()
+    def parse_expr(self):
+        node = self.parse_term()
         while self.token_atual()[0] == 'OP_ARIT':
             op = self.token_atual()[1]; self.consumir('OP_ARIT')
-            right = self.term()
-            if op == '+': val = val + right
-            elif op == '-': val = val - right
-            elif op == '*': val = val * right
-            elif op == '/': val = val / right
-        return val
+            right = self.parse_term()
+            node = BinOp(node, op, right)
+        return node
 
-    def term(self) -> Any:
-        tok, val = self.token_atual()
+    def parse_term(self):
+        # suporte a número negativo
+        tok, val, _, _ = self.token_atual()
         if tok == 'OP_ARIT' and val == '-':
-            self.consumir('OP_ARIT'); return -self.term()
+            self.consumir('OP_ARIT')
+            ntok,nval,_,_ = self.token_atual()
+            if ntok == 'NUM':
+                self.consumir('NUM')
+                num = float(nval) if '.' in nval else int(nval)
+                return Literal(-num)
+            # se não for literal, faz 0 - termo
+            right = self.parse_term()
+            return BinOp(Literal(0), '-', right)
+
         if tok == 'NUM':
-            self.consumir('NUM'); return float(val) if '.' in val else int(val)
+            self.consumir('NUM')
+            return Literal(float(val) if '.' in val else int(val))
         if tok == 'STRING':
-            self.consumir('STRING'); return val.strip('"')
+            self.consumir('STRING')
+            return Literal(val.strip('"'))
         if tok == 'CHAR':
-            self.consumir('CHAR'); return val.strip("'")
-        if tok == 'ID' and self.peek()[0] == 'DELIM' and self.peek()[1] == '(':
-            name = val; self.consumir('ID'); self.consumir('DELIM')
-            args = []
-            if not self.token_atual() == ('DELIM', ')'):
-                args.append(self.expr())
-                while self.token_atual() == ('DELIM', ','):
-                    self.consumir('DELIM'); args.append(self.expr())
-            self.consumir('DELIM')
-            if name not in self.functions:
-                self.terminal.insert(
-                    tk.END,
-                    f"Erro semântico: função '{name}' não declarada\n",
-                    "erro"
-                )
-                self.has_error = True; return None
-            params, body = self.functions[name]
-            old_sym, old_dec = self.symbols.copy(), self.declared.copy()
-            for p, a in zip(params, args):
-                self.declared.add(p); self.symbols[p] = a
-            child = AnalisadorSintatico(body + [('EOF','')], self.terminal)
-            child.declared, child.symbols, child.functions = (
-                self.declared.copy(), self.symbols.copy(), self.functions
-            )
-            child.analisar()
-            ret = child.symbols.get('__return__', None)
+            self.consumir('CHAR')
+            return Literal(val.strip("'"))
+        if tok == 'ID' and self.peek()[0]=='DELIM' and self.peek()[1]=='(':
+            return self.parse_call_expr()
+        if tok == 'ID':
+            self.consumir('ID')
+            return Var(val)
+        if tok == 'DELIM' and val=='(':
+            self.consumir('DELIM','(')
+            node = self.parse_expr()
+            self.consumir('DELIM',')')
+            return node
+
+        self.erro("Erro sintático: termo inválido", self.token_atual())
+        self.pos += 1
+        return None
+
+    def parse_call_expr(self):
+        name = self.token_atual()[1]; self.consumir('ID')
+        self.consumir('DELIM','(')
+        args = []
+        if self.token_atual()[1] != ')':
+            args.append(self.parse_expr())
+            while self.token_atual()[1] == ',':
+                self.consumir('DELIM',','); args.append(self.parse_expr())
+        self.consumir('DELIM',')')
+        return Call(name, args)
+
+    # ---- Execução ----
+    def execute(self, node: ASTNode):
+        if isinstance(node, Program):
+            for s in node.statements: self.execute(s)
+        elif isinstance(node, VarDecl):
+            self.declared.add(node.name)
+            self.symbols[node.name] = self.eval_expr(node.expr)
+        elif isinstance(node, Assign):
+            self.symbols[node.name] = self.eval_expr(node.expr)
+        elif isinstance(node, Print):
+            out = ''.join(str(self.eval_expr(a)) for a in node.args)
+            self.terminal.insert(tk.END, out + "\n")
+        elif isinstance(node, FuncDecl):
+            self.functions[node.name] = (node.params, node.body)
+        elif isinstance(node, Return):
+            self.symbols['__return__'] = self.eval_expr(node.expr)
+        elif isinstance(node, Call):
+            args = [self.eval_expr(a) for a in node.args]
+            if node.name not in self.functions:
+                self.erro(f"Erro semântico: função '{node.name}' não declarada", self.token_atual())
+                return
+            params, body = self.functions[node.name]
+            old_sym, old_dec = dict(self.symbols), set(self.declared)
+            for p,v in zip(params,args):
+                self.declared.add(p); self.symbols[p]=v
+            for s in body: self.execute(s)
+            ret = self.symbols.get('__return__', None)
             self.symbols, self.declared = old_sym, old_dec
             return ret
-        if tok == 'ID':
-            if val not in self.symbols:
-                self.terminal.insert(
-                    tk.END,
-                    f"Erro semântico: variável '{val}' não declarada\n",
-                    "erro"
-                )
-                self.has_error = True; self.pos += 1; return None
-            self.consumir('ID'); return self.symbols[val]
-        if tok == 'DELIM' and val == '(':
-            self.consumir('DELIM'); v = self.expr(); self.consumir('DELIM'); return v
-        self.terminal.insert(
-            tk.END,
-            f"Erro sintático: termo inválido '{val}'\n",
-            "erro"
-        )
-        self.has_error = True; self.pos += 1; return None
 
-    def skip_to_body(self):
-        while self.token_atual()[0] != 'EOF' and self.token_atual() != ('DELIM','{'):
-            self.pos += 1
-        if self.token_atual() == ('DELIM','{'): self.consumir('DELIM')
+    def eval_expr(self, node: ASTNode):
+        if isinstance(node, Literal): return node.value
+        if isinstance(node, Var):     return self.symbols.get(node.name, None)
+        if isinstance(node, BinOp):
+            l = self.eval_expr(node.left); r = self.eval_expr(node.right)
+            return {'+':l+r,'-':l-r,'*':l*r,'/':l/r}[node.op]
+        if isinstance(node, Call):
+            return self.execute(node)
+        return None
 
-    def skip_block_body(self):
-        depth = 0
-        while self.token_atual()[0] != 'EOF':
-            tok, val = self.token_atual()
-            if tok == 'DELIM' and val == '{': depth += 1
-            elif tok == 'DELIM' and val == '}':
-                if depth == 0:
-                    self.consumir('DELIM'); return
-                depth -= 1
-            self.pos += 1
+    # ---- Impressão da AST ----
+    def print_tree(self, node=None, indent=0):
+        if node is None:
+            self.pos = 0
+            node = self.parse()
+        pad = '  '*indent
+        t = type(node).__name__
+        info = getattr(node,'name', getattr(node,'value',''))
+        self.terminal.insert(tk.END, f"{pad}{t}" + (f": {info}" if info!="" else "") + "\n")
+        for field in ('statements','body','args','expr','left','right'):
+            val = getattr(node,field,None)
+            if isinstance(val, list):
+                for c in val: self.print_tree(c, indent+1)
+            elif val and isinstance(val, ASTNode):
+                self.print_tree(val, indent+1)

@@ -1,7 +1,11 @@
 # lexico.py
 import re
+from typing import List, Tuple
 
-def lex(codigo: str):
+# Token: (tipo, valor, linha, coluna)
+Token = Tuple[str,str,int,int]
+
+def lex(codigo: str) -> List[Token]:
     tabela_de_token = [
         ('COMENTARIO',   r'//[^\n]*|#[^\n]*'),
         ('VARIAVEL',     r'\bbau\b'),
@@ -16,7 +20,7 @@ def lex(codigo: str):
         ('OP_ARIT',      r'[+\-*/]'),
         ('OP_REL',       r'==|!=|>=|<=|>|<'),
         ('OP_LOGICO',    r'\b(e|ou|nao)\b'),
-        ('DELIM',        r'[(){};,]'),
+        ('DELIM',        r'[(){}\[\];,]'),
         ('NUM',          r'\d+(\.\d+)?'),
         ('STRING',       r'"[^"\n]*"'),
         ('CHAR',         r"'[^'\n]'"),
@@ -26,11 +30,20 @@ def lex(codigo: str):
         ('MISMATCH',     r'.'),
     ]
     tok_regex = '|'.join(f'(?P<{n}>{p})' for n,p in tabela_de_token)
-    tokens = []
+    line_num = 1
+    line_start = 0
+    tokens: List[Token] = []
     for mo in re.finditer(tok_regex, codigo):
-        kind, val = mo.lastgroup, mo.group()
-        if kind in ('SKIP','COMENTARIO','PULARLINHA','MISMATCH'):
+        kind = mo.lastgroup
+        val = mo.group()
+        start = mo.start()
+        if kind == 'PULARLINHA':
+            line_num += val.count('\n')
+            line_start = mo.end()
             continue
-        tokens.append((kind, val))
-    tokens.append(('EOF',''))
+        if kind in ('SKIP','COMENTARIO','MISMATCH'):
+            continue
+        col = start - line_start + 1
+        tokens.append((kind, val, line_num, col))
+    tokens.append(('EOF','', line_num, 1))
     return tokens
