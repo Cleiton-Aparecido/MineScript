@@ -1,0 +1,31 @@
+// Declaração de variáveis
+bau x = 8;
+bau y = -3;
+
+craftar soma(bau a, bau b) {
+    fornalha a + b;      
+}
+
+bau resultadoSoma   = soma(x, y);   
+
+quadro("Soma: ",   resultadoSoma);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

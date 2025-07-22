@@ -1,0 +1,11 @@
+
+bau a = 10;
+bau b = 5;
+
+// Estrutura condicional
+funil (a > b) {
+    quadro("a é maior que b");
+} ejetor {
+    quadro("a NÃO é maior que b");
+}
+
