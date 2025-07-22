@@ -1,0 +1,8 @@
+bau madeira = 5;
+
+redstone (madeira > 0) {
+    madeira = madeira - 1;
+    quadro("Contagem: ", madeira);
+}
+
+

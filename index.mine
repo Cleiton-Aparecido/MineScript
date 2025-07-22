@@ -23,6 +23,11 @@ quadro("Média: ",  resultadoMedia);
 
 
 
+bau soma = 1 + 2;
+
+quadro("resultado: ",  soma);
+
+
 
 
 
